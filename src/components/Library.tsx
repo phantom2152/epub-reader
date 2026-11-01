@@ -154,7 +154,7 @@ export default function Library({ onOpen }: { onOpen: (id: string) => void }) {
                   onClick={() => onOpen(b.id)}
                   className="block w-full text-left"
                 >
-                  <div className="aspect-[2/3] overflow-hidden rounded bg-zinc-800 shadow">
+                  <div className="aspect-2/3 overflow-hidden rounded bg-zinc-800 shadow">
                     <Cover blob={b.cover} title={b.title} />
                   </div>
                   <p className="mt-2 line-clamp-2 text-sm font-medium">

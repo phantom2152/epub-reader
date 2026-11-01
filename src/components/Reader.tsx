@@ -47,7 +47,7 @@ export default function Reader({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(settings);
 
-  const theme = getTheme(settings.themeId);
+  const theme = getTheme(settings);
 
   // Load the book and render it
   useEffect(() => {
