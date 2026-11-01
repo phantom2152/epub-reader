@@ -32,6 +32,7 @@ export default function Reader({
 }) {
   const viewerRef = useRef<HTMLDivElement>(null);
   const renditionRef = useRef<Rendition | null>(null);
+  const bookRef = useRef<Book | null>(null);
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
@@ -67,6 +68,7 @@ export default function Reader({
       setTitle(meta.title);
       const b = ePub(data);
       book = b;
+      bookRef.current = b;
 
       b.loaded.navigation.then((nav) => {
         if (!cancelled) setToc(nav.toc as unknown as TocItem[]);
@@ -137,6 +139,7 @@ export default function Reader({
     return () => {
       cancelled = true;
       renditionRef.current = null;
+      bookRef.current = null;
       book?.destroy();
     };
   }, [bookId]);
@@ -176,8 +179,48 @@ export default function Reader({
     };
   }, []);
 
-  function goTo(href: string) {
-    renditionRef.current?.display(href);
+  async function goTo(href: string) {
+    const rendition = renditionRef.current;
+    const book = bookRef.current;
+    if (!rendition || !book) return;
+
+    try {
+      await rendition.display(href);
+    } catch {
+      // TOC path didn't resolve, so match the chapter file against the real spine
+      const [rawPath, fragment] = href.split("#");
+      let path = rawPath;
+      try {
+        path = decodeURIComponent(rawPath);
+      } catch {
+        // keep the raw path
+      }
+      const fileName = path.split("/").pop();
+
+      const items = (
+        book.spine as unknown as { spineItems: { href: string }[] }
+      ).spineItems;
+      const match = items.find(
+        (i) =>
+          i.href === path ||
+          i.href.endsWith("/" + path) ||
+          path.endsWith("/" + i.href) ||
+          i.href.split("/").pop() === fileName,
+      );
+
+      if (match) {
+        try {
+          await rendition.display(
+            fragment ? `${match.href}#${fragment}` : match.href,
+          );
+        } catch {
+          await rendition.display(match.href); // anchor missing, go to chapter start
+        }
+      } else {
+        console.warn("No spine match for TOC href:", href);
+      }
+    }
+
     if (window.innerWidth < 768) setSidebarOpen(false);
   }
 
