@@ -51,3 +51,15 @@ export async function deleteBook(id: string) {
     tx.done,
   ]);
 }
+
+export async function getBookMeta(id: string) {
+  const db = await dbPromise;
+  return db.get("books", id);
+}
+
+export async function saveLocation(id: string, location: string) {
+  const db = await dbPromise;
+  const meta = await db.get("books", id);
+  if (!meta) return;
+  await db.put("books", { ...meta, location });
+}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Library from "./components/Library";
+import Reader from "./components/Reader";
 
 function App() {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -7,15 +8,7 @@ function App() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       {openId ? (
-        <div className="p-6">
-          <button
-            onClick={() => setOpenId(null)}
-            className="mb-4 text-sm text-indigo-400"
-          >
-            ← Back
-          </button>
-          <p>Reader goes here (book id: {openId})</p>
-        </div>
+        <Reader bookId={openId} onBack={() => setOpenId(null)} />
       ) : (
         <Library onOpen={setOpenId} />
       )}
