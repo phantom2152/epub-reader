@@ -31,13 +31,16 @@ interface Progress {
 export default function Reader({
   bookId,
   onBack,
+  onMissing,
 }: {
   bookId: string;
   onBack: () => void;
+  onMissing: () => void;
 }) {
   const viewerRef = useRef<HTMLDivElement>(null);
   const renditionRef = useRef<Rendition | null>(null);
   const bookRef = useRef<Book | null>(null);
+  const settingsWrapRef = useRef<HTMLDivElement>(null);
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
@@ -66,7 +69,12 @@ export default function Reader({
         getBookMeta(bookId),
       ]);
       if (cancelled) return;
-      if (!data || !meta || !viewerRef.current) {
+
+      if (!data || !meta) {
+        onMissing(); // book isn't in this browser's library, so send them home
+        return;
+      }
+      if (!viewerRef.current) {
         setStatus("error");
         return;
       }
@@ -120,6 +128,12 @@ export default function Reader({
       rendition.on("keyup", (e: KeyboardEvent) => {
         if (e.key === "ArrowRight") rendition.next();
         if (e.key === "ArrowLeft") rendition.prev();
+      });
+
+      // the book is in an iframe, so clicks/keys inside it need their own handlers
+      rendition.on("click", () => setSettingsOpen(false));
+      rendition.on("keydown", (e: KeyboardEvent) => {
+        if (e.key === "Escape") setSettingsOpen(false);
       });
 
       await rendition.display(meta.location ?? undefined);
@@ -195,6 +209,27 @@ export default function Reader({
     };
   }, []);
 
+  // close the settings panel on click-outside or Escape
+  useEffect(() => {
+    if (!settingsOpen) return;
+    function onDown(e: MouseEvent | TouchEvent) {
+      if (!settingsWrapRef.current?.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSettingsOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [settingsOpen]);
+
   async function goTo(href: string) {
     const rendition = renditionRef.current;
     const book = bookRef.current;
@@ -257,16 +292,18 @@ export default function Reader({
           ← Library
         </button>
         <h1 className="line-clamp-1 text-sm font-medium">{title}</h1>
-        <button
-          onClick={() => setSettingsOpen((o) => !o)}
-          aria-label="Settings"
-          className="ml-auto text-lg leading-none text-zinc-300 hover:text-white"
-        >
-          ⚙
-        </button>
-        {settingsOpen && (
-          <SettingsPanel settings={settings} onChange={setSettings} />
-        )}
+        <div ref={settingsWrapRef} className="ml-auto">
+          <button
+            onClick={() => setSettingsOpen((o) => !o)}
+            aria-label="Settings"
+            className="text-lg leading-none text-zinc-300 hover:text-white"
+          >
+            ⚙
+          </button>
+          {settingsOpen && (
+            <SettingsPanel settings={settings} onChange={setSettings} />
+          )}
+        </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
