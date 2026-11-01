@@ -13,6 +13,8 @@ import {
   getTheme,
   layoutOptions,
   loadSettings,
+  pageMaxWidth,
+  registerTypography,
   saveSettings,
   type Layout,
   type Settings,
@@ -52,7 +54,6 @@ export default function Reader({
   const layoutRef = useRef<Layout>(settings.layout); // layout the rendition currently uses
 
   const theme = getTheme(settings);
-  const wide = settings.layout === "double" || settings.layout === "auto";
 
   // Load the book and render it
   useEffect(() => {
@@ -89,6 +90,7 @@ export default function Reader({
         minSpreadWidth: lo.minSpreadWidth,
       });
       renditionRef.current = rendition;
+      registerTypography(rendition, () => settingsRef.current);
       applySettings(rendition, settingsRef.current);
 
       let lastCfi = "";
@@ -279,9 +281,8 @@ export default function Reader({
           style={{ backgroundColor: theme.bg }}
         >
           <div
-            className={`absolute inset-0 mx-auto px-6 py-4 ${
-              wide ? "max-w-6xl" : "max-w-3xl"
-            }`}
+            className="absolute inset-0 mx-auto px-6 py-4"
+            style={{ maxWidth: pageMaxWidth(settings) }}
           >
             <div ref={viewerRef} className="h-full w-full" />
           </div>

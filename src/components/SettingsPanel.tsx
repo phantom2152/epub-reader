@@ -4,10 +4,16 @@ import {
   FONT_MIN,
   FONT_STEP,
   LAYOUTS,
+  LH_MAX,
+  LH_MIN,
+  LH_START,
+  LH_STEP,
+  PAGE_WIDTHS,
   THEMES,
   getTheme,
   type Settings,
 } from "../lib/settings";
+import { FONTS } from "../lib/fonts";
 
 export default function SettingsPanel({
   settings,
@@ -19,9 +25,17 @@ export default function SettingsPanel({
   const set = (patch: Partial<Settings>) => onChange({ ...settings, ...patch });
   const isCustom = settings.themeId === CUSTOM_ID;
   const custom = getTheme({ ...settings, themeId: CUSTOM_ID });
+  const lh = settings.lineHeight;
+  function stepLh(delta: number) {
+    const next = (lh ?? LH_START) + delta;
+    set({
+      lineHeight:
+        Math.round(Math.min(LH_MAX, Math.max(LH_MIN, next)) * 10) / 10,
+    });
+  }
 
   return (
-    <div className="absolute right-4 top-full z-10 mt-2 w-64 rounded-lg border border-zinc-700 bg-zinc-900 p-4 shadow-xl">
+    <div className="absolute right-4 top-full z-10 mt-2 max-h-[80vh] w-72 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-900 p-4 shadow-xl">
       <p className="mb-2 text-xs uppercase tracking-wide text-zinc-400">
         Background
       </p>
@@ -114,10 +128,28 @@ export default function SettingsPanel({
         {LAYOUTS.find((l) => l.id === settings.layout)?.hint}
       </p>
 
+      <p className="mb-2 text-xs uppercase tracking-wide text-zinc-400">Font</p>
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        {FONTS.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => set({ fontId: f.id })}
+            style={{ fontFamily: f.stack ?? "inherit" }}
+            className={`truncate rounded border-2 px-2 py-1.5 text-sm ${
+              settings.fontId === f.id
+                ? "border-indigo-500 bg-zinc-800 text-white"
+                : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            }`}
+          >
+            {f.name}
+          </button>
+        ))}
+      </div>
+
       <p className="mb-2 text-xs uppercase tracking-wide text-zinc-400">
         Font size
       </p>
-      <div className="flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <button
           onClick={() => set({ fontSize: settings.fontSize - FONT_STEP })}
           disabled={settings.fontSize <= FONT_MIN}
@@ -133,6 +165,56 @@ export default function SettingsPanel({
         >
           A+
         </button>
+      </div>
+
+      <p className="mb-2 text-xs uppercase tracking-wide text-zinc-400">
+        Line spacing
+      </p>
+      <div className="mb-1 flex items-center justify-between">
+        <button
+          onClick={() => stepLh(-LH_STEP)}
+          disabled={lh !== null && lh <= LH_MIN}
+          className="rounded bg-zinc-800 px-3 py-1 text-sm hover:bg-zinc-700 disabled:opacity-40"
+        >
+          −
+        </button>
+        <button
+          onClick={() => set({ lineHeight: null })}
+          disabled={lh === null}
+          title="Reset to the book's own spacing"
+          className="text-sm text-zinc-300 enabled:hover:text-white"
+        >
+          {lh === null ? "Default" : lh.toFixed(1)}
+        </button>
+        <button
+          onClick={() => stepLh(LH_STEP)}
+          disabled={lh !== null && lh >= LH_MAX}
+          className="rounded bg-zinc-800 px-3 py-1 text-sm hover:bg-zinc-700 disabled:opacity-40"
+        >
+          +
+        </button>
+      </div>
+      <p className="mb-4 h-4 text-xs text-zinc-500">
+        {lh !== null && "Click the value to reset"}
+      </p>
+
+      <p className="mb-2 text-xs uppercase tracking-wide text-zinc-400">
+        Page width
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        {PAGE_WIDTHS.map((w) => (
+          <button
+            key={w.id}
+            onClick={() => set({ pageWidth: w.id })}
+            className={`rounded border-2 px-2 py-1.5 text-sm ${
+              settings.pageWidth === w.id
+                ? "border-indigo-500 bg-zinc-800 text-white"
+                : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            }`}
+          >
+            {w.name}
+          </button>
+        ))}
       </div>
     </div>
   );

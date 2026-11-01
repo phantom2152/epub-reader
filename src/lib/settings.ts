@@ -1,4 +1,5 @@
 import type { Rendition } from "epubjs";
+import { FONTS, typographyCss } from "./fonts";
 
 export interface Theme {
   id: string;
@@ -25,6 +26,14 @@ export const LAYOUTS: { id: Layout; name: string; hint: string }[] = [
   { id: "scroll", name: "Scroll", hint: "Scroll through each chapter" },
 ];
 
+export type PageWidth = "narrow" | "medium" | "wide";
+
+export const PAGE_WIDTHS: { id: PageWidth; name: string; px: number }[] = [
+  { id: "narrow", name: "Narrow", px: 560 },
+  { id: "medium", name: "Medium", px: 720 },
+  { id: "wide", name: "Wide", px: 920 },
+];
+
 export interface Settings {
   themeId: string; // a preset id, or 'custom'
   fontSize: number; // percent
@@ -32,6 +41,9 @@ export interface Settings {
   customFg: string;
   autoFg: boolean; // pick text color automatically from customBg
   layout: Layout;
+  fontId: string;
+  lineHeight: number | null; // null = the book's own line spacing
+  pageWidth: PageWidth;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,10 +53,18 @@ export const DEFAULT_SETTINGS: Settings = {
   customFg: "#cdd6f4",
   autoFg: true,
   layout: "single",
+  fontId: "book",
+  lineHeight: null,
+  pageWidth: "medium",
 };
 export const FONT_MIN = 70;
 export const FONT_MAX = 200;
 export const FONT_STEP = 10;
+
+export const LH_MIN = 1.2;
+export const LH_MAX = 2.4;
+export const LH_STEP = 0.1;
+export const LH_START = 1.5;
 
 const KEY = "reader-settings";
 
@@ -90,6 +110,13 @@ export function layoutOptions(layout: Layout) {
   }
 }
 
+// max width of the reading area (includes the 48px of horizontal padding)
+export function pageMaxWidth(s: Settings) {
+  const base = PAGE_WIDTHS.find((w) => w.id === s.pageWidth)?.px ?? 720;
+  const pages = s.layout === "double" || s.layout === "auto" ? 2 : 1;
+  return base * pages + 48;
+}
+
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
@@ -108,6 +135,18 @@ export function loadSettings(): Settings {
       layout: LAYOUTS.some((l) => l.id === p.layout)
         ? p.layout
         : DEFAULT_SETTINGS.layout,
+      fontId: FONTS.some((f) => f.id === p.fontId)
+        ? p.fontId
+        : DEFAULT_SETTINGS.fontId,
+      lineHeight:
+        typeof p.lineHeight === "number" &&
+        p.lineHeight >= LH_MIN &&
+        p.lineHeight <= LH_MAX
+          ? p.lineHeight
+          : null,
+      pageWidth: PAGE_WIDTHS.some((w) => w.id === p.pageWidth)
+        ? p.pageWidth
+        : DEFAULT_SETTINGS.pageWidth,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -122,11 +161,48 @@ export function saveSettings(s: Settings) {
   }
 }
 
+// ---- typography injection (font family + line spacing) ----
+
+interface ContentsLike {
+  document: Document;
+}
+
+const STYLE_ID = "reader-typography";
+
+function writeStyle(doc: Document, css: string) {
+  let el = doc.getElementById(STYLE_ID) as HTMLStyleElement | null;
+  if (!el) {
+    el = doc.createElement("style");
+    el.id = STYLE_ID;
+    doc.head.appendChild(el);
+  }
+  if (el.textContent !== css) el.textContent = css;
+}
+
+// Call once after renderTo: styles every chapter as it loads
+export function registerTypography(
+  rendition: Rendition,
+  getSettings: () => Settings,
+) {
+  rendition.hooks.content.register((contents: ContentsLike) => {
+    const s = getSettings();
+    writeStyle(contents.document, typographyCss(s.fontId, s.lineHeight));
+  });
+}
+
+// Updates chapters that are already on screen
+function applyTypography(rendition: Rendition, s: Settings) {
+  const css = typographyCss(s.fontId, s.lineHeight);
+  const contents = rendition.getContents() as unknown as ContentsLike[];
+  contents.forEach((c) => writeStyle(c.document, css));
+}
+
 export function applySettings(rendition: Rendition, s: Settings) {
   const t = getTheme(s);
   rendition.themes.override("color", t.fg, true);
   rendition.themes.override("background", t.bg, true);
   rendition.themes.fontSize(`${s.fontSize}%`);
+  applyTypography(rendition, s);
 }
 
 // Used for live changes after the book is already open.
