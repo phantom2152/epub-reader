@@ -8,10 +8,13 @@ import {
   saveLocations,
 } from "../lib/storage";
 import {
+  applyLayout,
   applySettings,
   getTheme,
+  layoutOptions,
   loadSettings,
   saveSettings,
+  type Layout,
   type Settings,
 } from "../lib/settings";
 import Toc, { type TocItem } from "./Toc";
@@ -46,8 +49,10 @@ export default function Reader({
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(settings);
+  const layoutRef = useRef<Layout>(settings.layout); // layout the rendition currently uses
 
   const theme = getTheme(settings);
+  const wide = settings.layout === "double" || settings.layout === "auto";
 
   // Load the book and render it
   useEffect(() => {
@@ -74,11 +79,14 @@ export default function Reader({
         if (!cancelled) setToc(nav.toc as unknown as TocItem[]);
       });
 
+      const lo = layoutOptions(settingsRef.current.layout);
+      layoutRef.current = settingsRef.current.layout;
       const rendition = b.renderTo(viewerRef.current, {
         width: "100%",
         height: "100%",
-        flow: "paginated",
-        spread: "none",
+        flow: lo.flow,
+        spread: lo.spread,
+        minSpreadWidth: lo.minSpreadWidth,
       });
       renditionRef.current = rendition;
       applySettings(rendition, settingsRef.current);
@@ -148,7 +156,13 @@ export default function Reader({
   useEffect(() => {
     settingsRef.current = settings;
     saveSettings(settings);
-    if (renditionRef.current) applySettings(renditionRef.current, settings);
+    const r = renditionRef.current;
+    if (!r) return;
+    applySettings(r, settings);
+    if (layoutRef.current !== settings.layout) {
+      layoutRef.current = settings.layout;
+      applyLayout(r, settings.layout);
+    }
   }, [settings]);
 
   // keys pressed while focus is on the main page
@@ -161,7 +175,7 @@ export default function Reader({
     return () => window.removeEventListener("keyup", onKey);
   }, []);
 
-  // re-layout the book whenever its container changes size (sidebar toggle etc.)
+  // re-layout the book whenever its container changes size (sidebar toggle, layout change, etc.)
   useEffect(() => {
     const el = viewerRef.current;
     if (!el) return;
@@ -264,7 +278,11 @@ export default function Reader({
           className="relative min-w-0 flex-1"
           style={{ backgroundColor: theme.bg }}
         >
-          <div className="absolute inset-0 mx-auto max-w-3xl px-6 py-4">
+          <div
+            className={`absolute inset-0 mx-auto px-6 py-4 ${
+              wide ? "max-w-6xl" : "max-w-3xl"
+            }`}
+          >
             <div ref={viewerRef} className="h-full w-full" />
           </div>
           {status === "loading" && (

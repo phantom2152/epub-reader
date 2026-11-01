@@ -3,6 +3,7 @@ import {
   FONT_MAX,
   FONT_MIN,
   FONT_STEP,
+  LAYOUTS,
   THEMES,
   getTheme,
   type Settings,
@@ -89,6 +90,29 @@ export default function SettingsPanel({
           )}
         </div>
       )}
+
+      <p className="mb-2 text-xs uppercase tracking-wide text-zinc-400">
+        Page layout
+      </p>
+      <div className="mb-1 grid grid-cols-2 gap-2">
+        {LAYOUTS.map((l) => (
+          <button
+            key={l.id}
+            onClick={() => set({ layout: l.id })}
+            title={l.hint}
+            className={`rounded border-2 px-2 py-1.5 text-sm ${
+              settings.layout === l.id
+                ? "border-indigo-500 bg-zinc-800 text-white"
+                : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            }`}
+          >
+            {l.name}
+          </button>
+        ))}
+      </div>
+      <p className="mb-4 text-xs text-zinc-500">
+        {LAYOUTS.find((l) => l.id === settings.layout)?.hint}
+      </p>
 
       <p className="mb-2 text-xs uppercase tracking-wide text-zinc-400">
         Font size

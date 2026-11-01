@@ -16,12 +16,22 @@ export const THEMES: Theme[] = [
 
 export const CUSTOM_ID = "custom";
 
+export type Layout = "single" | "double" | "auto" | "scroll";
+
+export const LAYOUTS: { id: Layout; name: string; hint: string }[] = [
+  { id: "single", name: "1 page", hint: "One page at a time" },
+  { id: "double", name: "2 pages", hint: "Two pages side by side" },
+  { id: "auto", name: "Auto", hint: "Two pages when the window is wide" },
+  { id: "scroll", name: "Scroll", hint: "Scroll through each chapter" },
+];
+
 export interface Settings {
   themeId: string; // a preset id, or 'custom'
   fontSize: number; // percent
   customBg: string;
   customFg: string;
   autoFg: boolean; // pick text color automatically from customBg
+  layout: Layout;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -30,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   customBg: "#1e1e2e",
   customFg: "#cdd6f4",
   autoFg: true,
+  layout: "single",
 };
 export const FONT_MIN = 70;
 export const FONT_MAX = 200;
@@ -66,6 +77,19 @@ export function getTheme(s: Settings): Theme {
   return THEMES.find((t) => t.id === s.themeId) ?? THEMES[0];
 }
 
+export function layoutOptions(layout: Layout) {
+  switch (layout) {
+    case "double":
+      return { flow: "paginated", spread: "always", minSpreadWidth: 1 };
+    case "auto":
+      return { flow: "paginated", spread: "auto", minSpreadWidth: 900 };
+    case "scroll":
+      return { flow: "scrolled-doc", spread: "none", minSpreadWidth: 800 };
+    default:
+      return { flow: "paginated", spread: "none", minSpreadWidth: 800 };
+  }
+}
+
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
@@ -81,6 +105,9 @@ export function loadSettings(): Settings {
       customFg: isHex(p.customFg) ? p.customFg : DEFAULT_SETTINGS.customFg,
       autoFg:
         typeof p.autoFg === "boolean" ? p.autoFg : DEFAULT_SETTINGS.autoFg,
+      layout: LAYOUTS.some((l) => l.id === p.layout)
+        ? p.layout
+        : DEFAULT_SETTINGS.layout,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -100,4 +127,12 @@ export function applySettings(rendition: Rendition, s: Settings) {
   rendition.themes.override("color", t.fg, true);
   rendition.themes.override("background", t.bg, true);
   rendition.themes.fontSize(`${s.fontSize}%`);
+}
+
+// Used for live changes after the book is already open.
+// (The initial layout is passed to renderTo instead.)
+export function applyLayout(rendition: Rendition, layout: Layout) {
+  const o = layoutOptions(layout);
+  rendition.spread(o.spread, o.minSpreadWidth);
+  rendition.flow(o.flow);
 }
