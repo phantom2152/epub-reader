@@ -7,7 +7,15 @@ import {
   saveLocation,
   saveLocations,
 } from "../lib/storage";
+import {
+  applySettings,
+  getTheme,
+  loadSettings,
+  saveSettings,
+  type Settings,
+} from "../lib/settings";
 import Toc, { type TocItem } from "./Toc";
+import SettingsPanel from "./SettingsPanel";
 
 interface Progress {
   page: number;
@@ -34,6 +42,11 @@ export default function Reader({
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.innerWidth >= 768,
   );
+  const [settings, setSettings] = useState<Settings>(loadSettings);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef(settings);
+
+  const theme = getTheme(settings.themeId);
 
   // Load the book and render it
   useEffect(() => {
@@ -66,6 +79,7 @@ export default function Reader({
         spread: "none",
       });
       renditionRef.current = rendition;
+      applySettings(rendition, settingsRef.current);
 
       let lastCfi = "";
 
@@ -106,7 +120,7 @@ export default function Reader({
           b.locations.load(cached);
         } else {
           await b.ready;
-          await b.locations.generate(1024); // ~1024 characters per "page"
+          await b.locations.generate(1024);
           if (cancelled) return;
           await saveLocations(bookId, b.locations.save());
         }
@@ -126,6 +140,13 @@ export default function Reader({
       book?.destroy();
     };
   }, [bookId]);
+
+  // apply + persist settings whenever they change
+  useEffect(() => {
+    settingsRef.current = settings;
+    saveSettings(settings);
+    if (renditionRef.current) applySettings(renditionRef.current, settings);
+  }, [settings]);
 
   // keys pressed while focus is on the main page
   useEffect(() => {
@@ -162,7 +183,7 @@ export default function Reader({
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-4 border-b border-zinc-800 px-4 py-2">
+      <header className="relative flex items-center gap-4 border-b border-zinc-800 px-4 py-2">
         <button
           onClick={() => setSidebarOpen((o) => !o)}
           aria-label="Toggle chapters"
@@ -177,6 +198,16 @@ export default function Reader({
           ← Library
         </button>
         <h1 className="line-clamp-1 text-sm font-medium">{title}</h1>
+        <button
+          onClick={() => setSettingsOpen((o) => !o)}
+          aria-label="Settings"
+          className="ml-auto text-lg leading-none text-zinc-300 hover:text-white"
+        >
+          ⚙
+        </button>
+        {settingsOpen && (
+          <SettingsPanel settings={settings} onChange={setSettings} />
+        )}
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -186,7 +217,10 @@ export default function Reader({
           </aside>
         )}
 
-        <div className="relative min-w-0 flex-1 bg-white">
+        <div
+          className="relative min-w-0 flex-1"
+          style={{ backgroundColor: theme.bg }}
+        >
           <div className="absolute inset-0 mx-auto max-w-3xl px-6 py-4">
             <div ref={viewerRef} className="h-full w-full" />
           </div>
