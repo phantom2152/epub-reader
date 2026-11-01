@@ -1,7 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import ePub, { type Book, type Rendition } from "epubjs";
-import { getBookFile, getBookMeta, saveLocation } from "../lib/storage";
+import {
+  getBookFile,
+  getBookMeta,
+  getLocations,
+  saveLocation,
+  saveLocations,
+} from "../lib/storage";
 import Toc, { type TocItem } from "./Toc";
+
+interface Progress {
+  page: number;
+  total: number;
+  percent: number;
+}
 
 export default function Reader({
   bookId,
@@ -18,6 +30,7 @@ export default function Reader({
   );
   const [toc, setToc] = useState<TocItem[]>([]);
   const [activeHref, setActiveHref] = useState("");
+  const [progress, setProgress] = useState<Progress | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.innerWidth >= 768,
   );
@@ -39,13 +52,14 @@ export default function Reader({
       }
 
       setTitle(meta.title);
-      book = ePub(data);
+      const b = ePub(data);
+      book = b;
 
-      book.loaded.navigation.then((nav) => {
+      b.loaded.navigation.then((nav) => {
         if (!cancelled) setToc(nav.toc as unknown as TocItem[]);
       });
 
-      const rendition = book.renderTo(viewerRef.current, {
+      const rendition = b.renderTo(viewerRef.current, {
         width: "100%",
         height: "100%",
         flow: "paginated",
@@ -53,11 +67,26 @@ export default function Reader({
       });
       renditionRef.current = rendition;
 
+      let lastCfi = "";
+
+      const updateProgress = () => {
+        if (cancelled || !lastCfi || !b.locations.length()) return;
+        const idx = Number(b.locations.locationFromCfi(lastCfi)) || 0;
+        const pct = Number(b.locations.percentageFromCfi(lastCfi)) || 0;
+        setProgress({
+          page: Math.max(0, idx) + 1,
+          total: b.locations.length(),
+          percent: Math.round(pct * 100),
+        });
+      };
+
       rendition.on(
         "relocated",
         (loc: { start: { cfi: string; href: string } }) => {
+          lastCfi = loc.start.cfi;
           saveLocation(bookId, loc.start.cfi);
           setActiveHref(loc.start.href);
+          updateProgress();
         },
       );
 
@@ -69,6 +98,21 @@ export default function Reader({
 
       await rendition.display(meta.location ?? undefined);
       if (!cancelled) setStatus("ready");
+
+      // Build (or load cached) page locations in the background
+      async function buildLocations() {
+        const cached = await getLocations(bookId);
+        if (cached) {
+          b.locations.load(cached);
+        } else {
+          await b.ready;
+          await b.locations.generate(1024); // ~1024 characters per "page"
+          if (cancelled) return;
+          await saveLocations(bookId, b.locations.save());
+        }
+        updateProgress();
+      }
+      buildLocations().catch((e) => console.error("locations failed", e));
     }
 
     init().catch((e) => {
@@ -159,19 +203,32 @@ export default function Reader({
         </div>
       </div>
 
-      <footer className="flex justify-between border-t border-zinc-800 px-4 py-2">
-        <button
-          onClick={() => renditionRef.current?.prev()}
-          className="rounded bg-zinc-800 px-4 py-1.5 text-sm hover:bg-zinc-700"
-        >
-          ← Prev
-        </button>
-        <button
-          onClick={() => renditionRef.current?.next()}
-          className="rounded bg-zinc-800 px-4 py-1.5 text-sm hover:bg-zinc-700"
-        >
-          Next →
-        </button>
+      <footer className="border-t border-zinc-800">
+        <div className="h-0.5 bg-zinc-800">
+          <div
+            className="h-full bg-indigo-500 transition-[width]"
+            style={{ width: `${progress?.percent ?? 0}%` }}
+          />
+        </div>
+        <div className="flex items-center justify-between px-4 py-2">
+          <button
+            onClick={() => renditionRef.current?.prev()}
+            className="rounded bg-zinc-800 px-4 py-1.5 text-sm hover:bg-zinc-700"
+          >
+            ← Prev
+          </button>
+          <span className="text-xs text-zinc-400">
+            {progress
+              ? `Page ${progress.page} / ${progress.total} · ${progress.percent}%`
+              : "Calculating pages…"}
+          </span>
+          <button
+            onClick={() => renditionRef.current?.next()}
+            className="rounded bg-zinc-800 px-4 py-1.5 text-sm hover:bg-zinc-700"
+          >
+            Next →
+          </button>
+        </div>
       </footer>
     </div>
   );

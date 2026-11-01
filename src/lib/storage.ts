@@ -6,18 +6,24 @@ export interface BookMeta {
   author: string;
   cover: Blob | null;
   addedAt: number;
-  location: string | null; // last reading position, used later
+  location: string | null; // last reading position
 }
 
 interface ReaderDB extends DBSchema {
   books: { key: string; value: BookMeta };
   files: { key: string; value: ArrayBuffer };
+  locations: { key: string; value: string };
 }
 
-const dbPromise = openDB<ReaderDB>("ebook-reader", 1, {
-  upgrade(db) {
-    db.createObjectStore("books", { keyPath: "id" });
-    db.createObjectStore("files");
+const dbPromise = openDB<ReaderDB>("ebook-reader", 2, {
+  upgrade(db, oldVersion) {
+    if (oldVersion < 1) {
+      db.createObjectStore("books", { keyPath: "id" });
+      db.createObjectStore("files");
+    }
+    if (oldVersion < 2) {
+      db.createObjectStore("locations");
+    }
   },
 });
 
@@ -44,10 +50,11 @@ export async function getBookFile(id: string) {
 
 export async function deleteBook(id: string) {
   const db = await dbPromise;
-  const tx = db.transaction(["books", "files"], "readwrite");
+  const tx = db.transaction(["books", "files", "locations"], "readwrite");
   await Promise.all([
     tx.objectStore("books").delete(id),
     tx.objectStore("files").delete(id),
+    tx.objectStore("locations").delete(id),
     tx.done,
   ]);
 }
@@ -62,4 +69,14 @@ export async function saveLocation(id: string, location: string) {
   const meta = await db.get("books", id);
   if (!meta) return;
   await db.put("books", { ...meta, location });
+}
+
+export async function getLocations(id: string) {
+  const db = await dbPromise;
+  return db.get("locations", id);
+}
+
+export async function saveLocations(id: string, json: string) {
+  const db = await dbPromise;
+  await db.put("locations", json, id);
 }
