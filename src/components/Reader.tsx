@@ -30,14 +30,6 @@ interface Progress {
   percent: number;
 }
 
-function toggleFullscreen() {
-  if (document.fullscreenElement) {
-    document.exitFullscreen().catch(() => {});
-  } else {
-    document.documentElement.requestFullscreen().catch((e) => console.warn(e));
-  }
-}
-
 export default function Reader({
   bookId,
   onBack,

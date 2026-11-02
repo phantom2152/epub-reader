@@ -107,7 +107,7 @@ export default function SearchPanel({
 
   return (
     <div>
-      <div className="sticky top-0 z-[1] bg-zinc-950 pb-2">
+      <div className="sticky top-0 z-1 bg-zinc-950 pb-2">
         <div className="flex gap-1">
           <input
             ref={inputRef}

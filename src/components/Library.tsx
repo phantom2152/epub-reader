@@ -315,7 +315,7 @@ export default function Library({ onOpen }: { onOpen: (id: string) => void }) {
                     onClick={() => onOpen(b.id)}
                     className="block w-full text-left"
                   >
-                    <div className="relative aspect-[2/3] overflow-hidden rounded bg-zinc-800 shadow">
+                    <div className="relative aspect-2/3 overflow-hidden rounded bg-zinc-800 shadow">
                       <Cover blob={b.cover} title={b.title} />
                       {percent > 0 && (
                         <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">
