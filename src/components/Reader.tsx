@@ -12,11 +12,14 @@ import {
   applySettings,
   getTheme,
   layoutOptions,
+  loadReaderUiState,
   loadSettings,
   pageMaxWidth,
   registerTypography,
+  saveReaderUiState,
   saveSettings,
   type Layout,
+  type ReaderUiState,
   type Settings,
 } from "../lib/settings";
 import { makeChapterLabeler, searchBook, type SearchHit } from "../lib/search";
@@ -52,13 +55,13 @@ export default function Reader({
   const [toc, setToc] = useState<TocItem[]>([]);
   const [activeHref, setActiveHref] = useState("");
   const [progress, setProgress] = useState<Progress | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(
-    () => window.innerWidth >= 768,
+  const [readerUi, setReaderUi] = useState<ReaderUiState>(() =>
+    loadReaderUiState(window.innerWidth >= 768),
   );
+  const { sidebarOpen, focus } = readerUi;
   const [tab, setTab] = useState<"toc" | "search">("toc");
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [focus, setFocus] = useState(false); // focus mode: header/footer hidden
   const [peek, setPeek] = useState(false); // header/footer temporarily shown in focus mode
   const settingsOpenRef = useRef(false);
   const settingsRef = useRef(settings);
@@ -151,15 +154,19 @@ export default function Reader({
       rendition.on("keydown", (e: KeyboardEvent) => {
         if (e.key === "Escape") {
           if (settingsOpenRef.current) setSettingsOpen(false);
-          else setFocus(false);
+          else setReaderUi((state) => ({ ...state, focus: false }));
         }
         if (e.ctrlKey || e.metaKey || e.altKey) return;
         const k = e.key.toLowerCase();
         if (k === "f") {
-          setFocus((f) => !f);
+          setReaderUi((state) => ({ ...state, focus: !state.focus }));
           setPeek(false);
         }
-        if (k === "b") setSidebarOpen((o) => !o);
+        if (k === "b")
+          setReaderUi((state) => ({
+            ...state,
+            sidebarOpen: !state.sidebarOpen,
+          }));
       });
 
       await rendition.display(meta.location ?? undefined);
@@ -209,6 +216,10 @@ export default function Reader({
       applyLayout(r, settings.layout);
     }
   }, [settings]);
+
+  useEffect(() => {
+    saveReaderUiState(readerUi);
+  }, [readerUi]);
 
   // keys pressed while focus is on the main page
   useEffect(() => {
@@ -273,7 +284,9 @@ export default function Reader({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       // if the settings panel is open, Esc just closes it (handled elsewhere)
-      if (e.key === "Escape" && !settingsOpenRef.current) setFocus(false);
+      if (e.key === "Escape" && !settingsOpenRef.current) {
+        setReaderUi((state) => ({ ...state, focus: false }));
+      }
 
       const t = e.target as HTMLElement | null;
       if (
@@ -288,11 +301,14 @@ export default function Reader({
       const k = e.key.toLowerCase();
       if (k === "f") {
         e.preventDefault();
-        setFocus((f) => !f);
+        setReaderUi((state) => ({ ...state, focus: !state.focus }));
         setPeek(false);
       } else if (k === "b") {
         e.preventDefault();
-        setSidebarOpen((o) => !o);
+        setReaderUi((state) => ({
+          ...state,
+          sidebarOpen: !state.sidebarOpen,
+        }));
       }
     }
     window.addEventListener("keydown", onKey);
@@ -345,7 +361,9 @@ export default function Reader({
       }
     }
 
-    if (window.innerWidth < 768) setSidebarOpen(false);
+    if (window.innerWidth < 768) {
+      setReaderUi((state) => ({ ...state, sidebarOpen: false }));
+    }
   }
 
   // ---- search ----
@@ -399,11 +417,13 @@ export default function Reader({
     } catch (e) {
       console.warn("Could not highlight search result", e);
     }
-    if (window.innerWidth < 768) setSidebarOpen(false);
+    if (window.innerWidth < 768) {
+      setReaderUi((state) => ({ ...state, sidebarOpen: false }));
+    }
   }
 
   function openSearch() {
-    setSidebarOpen(true);
+    setReaderUi((state) => ({ ...state, sidebarOpen: true }));
     setTab("search");
     requestAnimationFrame(() => searchInputRef.current?.focus());
   }
@@ -435,7 +455,12 @@ export default function Reader({
         }`}
       >
         <button
-          onClick={() => setSidebarOpen((o) => !o)}
+          onClick={() =>
+            setReaderUi((state) => ({
+              ...state,
+              sidebarOpen: !state.sidebarOpen,
+            }))
+          }
           aria-label="Toggle sidebar"
           className="text-lg leading-none text-zinc-300 hover:text-white"
         >
@@ -459,7 +484,7 @@ export default function Reader({
           </button>
           <button
             onClick={() => {
-              setFocus((f) => !f);
+              setReaderUi((state) => ({ ...state, focus: !state.focus }));
               setPeek(false);
             }}
             aria-label={focus ? "Exit focus mode" : "Enter focus mode"}

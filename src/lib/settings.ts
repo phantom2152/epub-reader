@@ -67,6 +67,40 @@ export const LH_STEP = 0.1;
 export const LH_START = 1.5;
 
 const KEY = "reader-settings";
+const UI_STATE_KEY = "reader-ui-state";
+
+export interface ReaderUiState {
+  sidebarOpen: boolean;
+  focus: boolean;
+}
+
+export function loadReaderUiState(defaultSidebarOpen: boolean): ReaderUiState {
+  const defaults = { sidebarOpen: defaultSidebarOpen, focus: false };
+  try {
+    const raw = localStorage.getItem(UI_STATE_KEY);
+    if (!raw) return defaults;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return defaults;
+    const stored = parsed as Record<string, unknown>;
+    return {
+      sidebarOpen:
+        typeof stored.sidebarOpen === "boolean"
+          ? stored.sidebarOpen
+          : defaultSidebarOpen,
+      focus: typeof stored.focus === "boolean" ? stored.focus : false,
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+export function saveReaderUiState(state: ReaderUiState) {
+  try {
+    localStorage.setItem(UI_STATE_KEY, JSON.stringify(state));
+  } catch {
+    // storage unavailable, UI state just won't persist
+  }
+}
 
 const clampFont = (n: number) => Math.min(FONT_MAX, Math.max(FONT_MIN, n));
 const isHex = (v: unknown): v is string =>
