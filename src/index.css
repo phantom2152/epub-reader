@@ -4,3 +4,14 @@ html {
   background-color: #09090b; /* zinc-950, same as App.tsx */
   color-scheme: dark;
 }
+
+@media (hover: hover) {
+  .card-menu-btn {
+    opacity: 0;
+  }
+  .group:hover .card-menu-btn,
+  .card-menu-btn:focus-visible,
+  .card-menu-btn[aria-expanded="true"] {
+    opacity: 1;
+  }
+}

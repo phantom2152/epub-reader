@@ -9,6 +9,7 @@ export interface BookMeta {
   location: string | null; // last reading position
   progress?: number; // 0-100
   lastReadAt?: number;
+  finished?: boolean;
 }
 
 interface ReaderDB extends DBSchema {
@@ -94,4 +95,13 @@ export async function getLocations(id: string) {
 export async function saveLocations(id: string, json: string) {
   const db = await dbPromise;
   await db.put("locations", json, id);
+}
+
+export async function setFinished(id: string, finished: boolean) {
+  const db = await dbPromise;
+  const tx = db.transaction("books", "readwrite");
+  const meta = await tx.store.get(id);
+  if (!meta) return;
+  await tx.store.put({ ...meta, finished });
+  await tx.done;
 }
