@@ -66,14 +66,14 @@ export default function Reader({
   const [tab, setTab] = useState<"toc" | "search">("toc");
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
-  const [peek, setPeek] = useState(false); // header/footer temporarily shown in fullscreen
-  const canFullscreen = document.fullscreenEnabled;
+  const [focus, setFocus] = useState(false); // focus mode: header/footer hidden
+  const [peek, setPeek] = useState(false); // header/footer temporarily shown in focus mode
+  const settingsOpenRef = useRef(false);
   const settingsRef = useRef(settings);
   const layoutRef = useRef<Layout>(settings.layout); // layout the rendition currently uses
 
   const theme = getTheme(settings);
-  const chromeHidden = fullscreen && !peek && !settingsOpen;
+  const chromeHidden = focus && !peek && !settingsOpen;
 
   // Load the book and render it
   useEffect(() => {
@@ -152,10 +152,16 @@ export default function Reader({
         setPeek(false);
       });
       rendition.on("keydown", (e: KeyboardEvent) => {
-        if (e.key === "Escape") setSettingsOpen(false);
+        if (e.key === "Escape") {
+          if (settingsOpenRef.current) setSettingsOpen(false);
+          else setFocus(false);
+        }
         if (e.ctrlKey || e.metaKey || e.altKey) return;
         const k = e.key.toLowerCase();
-        if (k === "f") toggleFullscreen();
+        if (k === "f") {
+          setFocus((f) => !f);
+          setPeek(false);
+        }
         if (k === "b") setSidebarOpen((o) => !o);
       });
 
@@ -265,9 +271,12 @@ export default function Reader({
     };
   }, []);
 
-  // keyboard shortcuts (F = fullscreen, B = sidebar) + keep fullscreen state in sync
+  // keyboard shortcuts: F = focus mode, B = sidebar, Esc = leave focus mode
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // if the settings panel is open, Esc just closes it (handled elsewhere)
+      if (e.key === "Escape" && !settingsOpenRef.current) setFocus(false);
+
       const t = e.target as HTMLElement | null;
       if (
         t &&
@@ -281,23 +290,20 @@ export default function Reader({
       const k = e.key.toLowerCase();
       if (k === "f") {
         e.preventDefault();
-        toggleFullscreen();
+        setFocus((f) => !f);
+        setPeek(false);
       } else if (k === "b") {
         e.preventDefault();
         setSidebarOpen((o) => !o);
       }
     }
-    function onChange() {
-      setFullscreen(!!document.fullscreenElement);
-      setPeek(false);
-    }
     window.addEventListener("keydown", onKey);
-    document.addEventListener("fullscreenchange", onChange);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.removeEventListener("fullscreenchange", onChange);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  useEffect(() => {
+    settingsOpenRef.current = settingsOpen;
+  }, [settingsOpen]);
 
   async function goTo(href: string) {
     const rendition = renditionRef.current;
@@ -406,7 +412,7 @@ export default function Reader({
 
   return (
     <div className="flex h-screen flex-col">
-      {fullscreen && (
+      {
         <>
           <div
             onMouseEnter={() => setPeek(true)}
@@ -419,11 +425,11 @@ export default function Reader({
             className="fixed inset-x-0 bottom-0 z-20 h-3"
           />
         </>
-      )}
+      }
       <header
         onMouseLeave={() => setPeek(false)}
         className={`flex items-center gap-4 border-b border-zinc-800 px-4 py-2 ${
-          fullscreen
+          focus
             ? `fixed inset-x-0 top-0 z-30 bg-zinc-950 transition-transform duration-200 ${
                 chromeHidden ? "-translate-y-full" : "translate-y-0"
               }`
@@ -453,16 +459,17 @@ export default function Reader({
           >
             🔍
           </button>
-          {canFullscreen && (
-            <button
-              onClick={toggleFullscreen}
-              aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              title={fullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"}
-              className="text-lg leading-none text-zinc-300 hover:text-white"
-            >
-              ⛶
-            </button>
-          )}
+          <button
+            onClick={() => {
+              setFocus((f) => !f);
+              setPeek(false);
+            }}
+            aria-label={focus ? "Exit focus mode" : "Enter focus mode"}
+            title={focus ? "Exit focus mode (F)" : "Focus mode (F)"}
+            className="text-lg leading-none text-zinc-300 hover:text-white"
+          >
+            ⛶
+          </button>
           <div ref={settingsWrapRef}>
             <button
               onClick={() => setSettingsOpen((o) => !o)}
@@ -541,7 +548,7 @@ export default function Reader({
       <footer
         onMouseLeave={() => setPeek(false)}
         className={`border-t border-zinc-800 ${
-          fullscreen
+          focus
             ? `fixed inset-x-0 bottom-0 z-30 bg-zinc-950 transition-transform duration-200 ${
                 chromeHidden ? "translate-y-full" : "translate-y-0"
               }`
