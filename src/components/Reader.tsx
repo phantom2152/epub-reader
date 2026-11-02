@@ -30,6 +30,14 @@ interface Progress {
   percent: number;
 }
 
+function toggleFullscreen() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  } else {
+    document.documentElement.requestFullscreen().catch((e) => console.warn(e));
+  }
+}
+
 export default function Reader({
   bookId,
   onBack,
@@ -58,10 +66,14 @@ export default function Reader({
   const [tab, setTab] = useState<"toc" | "search">("toc");
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [peek, setPeek] = useState(false); // header/footer temporarily shown in fullscreen
+  const canFullscreen = document.fullscreenEnabled;
   const settingsRef = useRef(settings);
   const layoutRef = useRef<Layout>(settings.layout); // layout the rendition currently uses
 
   const theme = getTheme(settings);
+  const chromeHidden = fullscreen && !peek && !settingsOpen;
 
   // Load the book and render it
   useEffect(() => {
@@ -135,9 +147,20 @@ export default function Reader({
       });
 
       // the book is in an iframe, so clicks/keys inside it need their own handlers
-      rendition.on("click", () => setSettingsOpen(false));
+      rendition.on("click", () => {
+        setSettingsOpen(false);
+        setPeek(false);
+      });
       rendition.on("keydown", (e: KeyboardEvent) => {
         if (e.key === "Escape") setSettingsOpen(false);
+        if (
+          (e.key === "f" || e.key === "F") &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !e.altKey
+        ) {
+          toggleFullscreen();
+        }
       });
 
       await rendition.display(meta.location ?? undefined);
@@ -291,6 +314,40 @@ export default function Reader({
     if (window.innerWidth < 768) setSidebarOpen(false);
   }
 
+  // fullscreen: F shortcut, and keep our state in sync (Esc also exits)
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
+      if (
+        (e.key === "f" || e.key === "F") &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey
+      ) {
+        e.preventDefault();
+        toggleFullscreen();
+      }
+    }
+    function onChange() {
+      setFullscreen(!!document.fullscreenElement);
+      setPeek(false);
+    }
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("fullscreenchange", onChange);
+    };
+  }, []);
+
   // ---- search ----
 
   async function runSearch(
@@ -353,7 +410,30 @@ export default function Reader({
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="relative flex items-center gap-4 border-b border-zinc-800 px-4 py-2">
+      {fullscreen && (
+        <>
+          <div
+            onMouseEnter={() => setPeek(true)}
+            onClick={() => setPeek(true)}
+            className="fixed inset-x-0 top-0 z-20 h-3"
+          />
+          <div
+            onMouseEnter={() => setPeek(true)}
+            onClick={() => setPeek(true)}
+            className="fixed inset-x-0 bottom-0 z-20 h-3"
+          />
+        </>
+      )}
+      <header
+        onMouseLeave={() => setPeek(false)}
+        className={`flex items-center gap-4 border-b border-zinc-800 px-4 py-2 ${
+          fullscreen
+            ? `fixed inset-x-0 top-0 z-30 bg-zinc-950 transition-transform duration-200 ${
+                chromeHidden ? "-translate-y-full" : "translate-y-0"
+              }`
+            : "relative"
+        }`}
+      >
         <button
           onClick={() => setSidebarOpen((o) => !o)}
           aria-label="Toggle sidebar"
@@ -377,6 +457,16 @@ export default function Reader({
           >
             🔍
           </button>
+          {canFullscreen && (
+            <button
+              onClick={toggleFullscreen}
+              aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              title={fullscreen ? "Exit fullscreen (F)" : "Fullscreen (F)"}
+              className="text-lg leading-none text-zinc-300 hover:text-white"
+            >
+              ⛶
+            </button>
+          )}
           <div ref={settingsWrapRef}>
             <button
               onClick={() => setSettingsOpen((o) => !o)}
@@ -452,7 +542,16 @@ export default function Reader({
         </div>
       </div>
 
-      <footer className="border-t border-zinc-800">
+      <footer
+        onMouseLeave={() => setPeek(false)}
+        className={`border-t border-zinc-800 ${
+          fullscreen
+            ? `fixed inset-x-0 bottom-0 z-30 bg-zinc-950 transition-transform duration-200 ${
+                chromeHidden ? "translate-y-full" : "translate-y-0"
+              }`
+            : ""
+        }`}
+      >
         <div className="h-0.5 bg-zinc-800">
           <div
             className="h-full bg-indigo-500 transition-[width]"
