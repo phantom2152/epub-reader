@@ -44,6 +44,7 @@ export interface Settings {
   fontId: string;
   lineHeight: number | null; // null = the book's own line spacing
   pageWidth: PageWidth;
+  invert: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -56,6 +57,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fontId: "book",
   lineHeight: null,
   pageWidth: "medium",
+  invert: false,
 };
 export const FONT_MIN = 70;
 export const FONT_MAX = 200;
@@ -181,6 +183,8 @@ export function loadSettings(): Settings {
       pageWidth: PAGE_WIDTHS.some((w) => w.id === p.pageWidth)
         ? p.pageWidth
         : DEFAULT_SETTINGS.pageWidth,
+      invert:
+        typeof p.invert === "boolean" ? p.invert : DEFAULT_SETTINGS.invert,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -220,13 +224,16 @@ export function registerTypography(
 ) {
   rendition.hooks.content.register((contents: ContentsLike) => {
     const s = getSettings();
-    writeStyle(contents.document, typographyCss(s.fontId, s.lineHeight));
+    writeStyle(
+      contents.document,
+      typographyCss(s.fontId, s.lineHeight, s.invert),
+    );
   });
 }
 
 // Updates chapters that are already on screen
 function applyTypography(rendition: Rendition, s: Settings) {
-  const css = typographyCss(s.fontId, s.lineHeight);
+  const css = typographyCss(s.fontId, s.lineHeight, s.invert);
   const contents = rendition.getContents() as unknown as ContentsLike[];
   contents.forEach((c) => writeStyle(c.document, css));
 }

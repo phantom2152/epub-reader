@@ -105,6 +105,22 @@ export default function SettingsPanel({
         </div>
       )}
 
+      <label className="mb-4 flex cursor-pointer items-start justify-between gap-3 text-sm text-zinc-300">
+        <span>
+          Invert colors
+          <span className="block text-xs text-zinc-500">
+            Flips the page and the book’s own colors (like code samples). Images
+            stay as they are.
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={settings.invert}
+          onChange={(e) => set({ invert: e.target.checked })}
+          className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-indigo-500"
+        />
+      </label>
+
       <p className="mb-2 text-xs uppercase tracking-wide text-zinc-400">
         Page layout
       </p>

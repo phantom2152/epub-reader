@@ -26,6 +26,7 @@ import { makeChapterLabeler, searchBook, type SearchHit } from "../lib/search";
 import Toc, { type TocItem } from "./Toc";
 import SettingsPanel from "./SettingsPanel";
 import SearchPanel from "./SearchPanel";
+import { INVERT_FILTER } from "../lib/fonts";
 
 interface Progress {
   page: number;
@@ -560,7 +561,10 @@ export default function Reader({
 
         <div
           className="relative min-w-0 flex-1"
-          style={{ backgroundColor: theme.bg }}
+          style={{
+            backgroundColor: theme.bg,
+            filter: settings.invert ? INVERT_FILTER : undefined,
+          }}
         >
           <div
             className="absolute inset-0 mx-auto px-6 py-4"

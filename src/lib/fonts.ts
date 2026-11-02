@@ -85,8 +85,15 @@ function collectFontFaces(): string {
   return css;
 }
 
+
+export const INVERT_FILTER = "invert(1) hue-rotate(180deg)";
+
 // CSS injected into every book chapter
-export function typographyCss(fontId: string, lineHeight: number | null) {
+export function typographyCss(
+  fontId: string,
+  lineHeight: number | null,
+  invert: boolean,
+) {
   const font = getFont(fontId);
   const parts: string[] = [];
   if (font.stack) {
@@ -98,6 +105,12 @@ export function typographyCss(fontId: string, lineHeight: number | null) {
   if (lineHeight) {
     parts.push(
       `body, body p, body li, body blockquote, body div{line-height:${lineHeight} !important;}`,
+    );
+  }
+  if (invert) {
+    // the whole reading area is inverted, so flip pictures back
+    parts.push(
+      `img, svg, video, canvas, picture{filter:${INVERT_FILTER} !important;}`,
     );
   }
   return parts.join("\n");
