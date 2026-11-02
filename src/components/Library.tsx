@@ -9,6 +9,9 @@ import {
 } from "../lib/storage";
 import { readMetadata } from "../lib/epub";
 import ConfirmDialog from "./ConfirmDialog";
+import { onBookAdded } from "../lib/downloads";
+import AddMenu from "./AddMenu";
+import LinkDialog from "./LinkDialog";
 
 function Cover({ blob, title }: { blob: Blob | null; title: string }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -147,6 +150,7 @@ export default function Library({ onOpen }: { onOpen: (id: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
   const [pending, setPending] = useState<{
     kind: "delete" | "download";
     book: BookMeta;
@@ -157,6 +161,14 @@ export default function Library({ onOpen }: { onOpen: (id: string) => void }) {
   useEffect(() => {
     listBooks().then(setBooks);
   }, []);
+
+  useEffect(
+    () =>
+      onBookAdded(() => {
+        listBooks().then(setBooks);
+      }),
+    [],
+  );
 
   async function addFiles(files: File[]) {
     if (files.length === 0 || busy) return;
@@ -268,13 +280,11 @@ export default function Library({ onOpen }: { onOpen: (id: string) => void }) {
       <div className="mx-auto max-w-5xl p-6">
         <header className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Library</h1>
-          <button
-            onClick={() => inputRef.current?.click()}
-            disabled={busy}
-            className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500 disabled:opacity-50"
-          >
-            {busy ? "Adding…" : "Add book"}
-          </button>
+          <AddMenu
+            busy={busy}
+            onDevice={() => inputRef.current?.click()}
+            onLink={() => setLinkOpen(true)}
+          />
           <input
             ref={inputRef}
             type="file"
@@ -291,7 +301,7 @@ export default function Library({ onOpen }: { onOpen: (id: string) => void }) {
           <div className="rounded-lg border-2 border-dashed border-zinc-700 p-12 text-center text-zinc-400">
             <p>No books yet.</p>
             <p className="mt-1 text-sm">
-              Drag EPUB files here, or click “Add book”.
+              Drag EPUB files here, or use the + button.
             </p>
           </div>
         ) : (
@@ -353,7 +363,7 @@ export default function Library({ onOpen }: { onOpen: (id: string) => void }) {
           </div>
         </div>
       )}
-
+      {linkOpen && <LinkDialog onClose={() => setLinkOpen(false)} />}
       {pending && (
         <ConfirmDialog
           title={

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Library from "./components/Library";
 import Reader from "./components/Reader";
+import DownloadTray from "./components/DownloadTray";
 
 function parseHash(): string | null {
   const m = location.hash.match(/^#\/book\/(.+)$/);
@@ -57,6 +58,7 @@ function App() {
       ) : (
         <Library onOpen={openBook} />
       )}
+      <DownloadTray />
     </div>
   );
 }
