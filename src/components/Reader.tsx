@@ -153,14 +153,10 @@ export default function Reader({
       });
       rendition.on("keydown", (e: KeyboardEvent) => {
         if (e.key === "Escape") setSettingsOpen(false);
-        if (
-          (e.key === "f" || e.key === "F") &&
-          !e.ctrlKey &&
-          !e.metaKey &&
-          !e.altKey
-        ) {
-          toggleFullscreen();
-        }
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        const k = e.key.toLowerCase();
+        if (k === "f") toggleFullscreen();
+        if (k === "b") setSidebarOpen((o) => !o);
       });
 
       await rendition.display(meta.location ?? undefined);
@@ -269,6 +265,40 @@ export default function Reader({
     };
   }, []);
 
+  // keyboard shortcuts (F = fullscreen, B = sidebar) + keep fullscreen state in sync
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "f") {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (k === "b") {
+        e.preventDefault();
+        setSidebarOpen((o) => !o);
+      }
+    }
+    function onChange() {
+      setFullscreen(!!document.fullscreenElement);
+      setPeek(false);
+    }
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("fullscreenchange", onChange);
+    };
+  }, []);
+
   async function goTo(href: string) {
     const rendition = renditionRef.current;
     const book = bookRef.current;
@@ -313,40 +343,6 @@ export default function Reader({
 
     if (window.innerWidth < 768) setSidebarOpen(false);
   }
-
-  // fullscreen: F shortcut, and keep our state in sync (Esc also exits)
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const t = e.target as HTMLElement | null;
-      if (
-        t &&
-        (t.tagName === "INPUT" ||
-          t.tagName === "TEXTAREA" ||
-          t.isContentEditable)
-      ) {
-        return;
-      }
-      if (
-        (e.key === "f" || e.key === "F") &&
-        !e.ctrlKey &&
-        !e.metaKey &&
-        !e.altKey
-      ) {
-        e.preventDefault();
-        toggleFullscreen();
-      }
-    }
-    function onChange() {
-      setFullscreen(!!document.fullscreenElement);
-      setPeek(false);
-    }
-    window.addEventListener("keydown", onKey);
-    document.addEventListener("fullscreenchange", onChange);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.removeEventListener("fullscreenchange", onChange);
-    };
-  }, []);
 
   // ---- search ----
 
