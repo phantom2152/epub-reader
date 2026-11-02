@@ -14,6 +14,9 @@ type Phase =
   | { kind: "ready"; info: LinkInfo }
   | { kind: "error"; message: string };
 
+// a real filename ends in an extension; random IDs from CDN links don't
+const hasExtension = (name: string) => /\.[a-z0-9]{2,5}$/i.test(name);
+
 export default function LinkDialog({ onClose }: { onClose: () => void }) {
   const [url, setUrl] = useState("");
   const [phase, setPhase] = useState<Phase>({ kind: "input" });
@@ -56,12 +59,17 @@ export default function LinkDialog({ onClose }: { onClose: () => void }) {
   }
 
   function add(info: LinkInfo) {
-    startDownload({ url: info.url, name: info.name, size: info.size });
+    startDownload({
+      url: info.url,
+      name: hasExtension(info.name) ? info.name : "Downloading book…",
+      size: info.size,
+    });
     onClose();
   }
 
   const ready = phase.kind === "ready" ? phase.info : null;
   const tooBig = !!ready && ready.size !== null && ready.size > MAX_BYTES;
+  const nameKnown = !!ready && hasExtension(ready.name);
 
   return (
     <div
@@ -84,14 +92,27 @@ export default function LinkDialog({ onClose }: { onClose: () => void }) {
                 <dt className="text-xs uppercase tracking-wide text-zinc-400">
                   File
                 </dt>
-                <dd className="break-all font-medium">{ready.name}</dd>
+                {nameKnown ? (
+                  <dd className="break-all font-medium">{ready!.name}</dd>
+                ) : (
+                  <dd className="text-zinc-300">
+                    Not provided by the server
+                    <span className="block text-xs text-zinc-500">
+                      The title is read from the book after download.
+                    </span>
+                  </dd>
+                )}
               </div>
               <div className="flex gap-6">
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-zinc-400">
                     Size
                   </dt>
-                  <dd>{ready.size ? formatBytes(ready.size) : "Unknown"}</dd>
+                  <dd>
+                    {ready.size
+                      ? formatBytes(ready.size)
+                      : "Shown when download starts"}
+                  </dd>
                 </div>
                 <div className="min-w-0">
                   <dt className="text-xs uppercase tracking-wide text-zinc-400">
