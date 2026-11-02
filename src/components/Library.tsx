@@ -28,6 +28,13 @@ const isEpub = (f: File) =>
 const hasFiles = (e: React.DragEvent) =>
   Array.from(e.dataTransfer.types).includes("Files");
 
+function progressLabel(b: BookMeta) {
+  const p = b.progress ?? 0;
+  if (p >= 99) return "Finished";
+  if (p > 0) return `${p}%`;
+  return b.location ? "" : "New";
+}
+
 export default function Library({ onOpen }: { onOpen: (id: string) => void }) {
   const [books, setBooks] = useState<BookMeta[]>([]);
   const [busy, setBusy] = useState(false);
@@ -154,14 +161,25 @@ export default function Library({ onOpen }: { onOpen: (id: string) => void }) {
                   onClick={() => onOpen(b.id)}
                   className="block w-full text-left"
                 >
-                  <div className="aspect-2/3 overflow-hidden rounded bg-zinc-800 shadow">
+                  <div className="relative aspect-2/3 overflow-hidden rounded bg-zinc-800 shadow">
                     <Cover blob={b.cover} title={b.title} />
+                    {(b.progress ?? 0) > 0 && (
+                      <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">
+                        <div
+                          className="h-full bg-indigo-500"
+                          style={{ width: `${b.progress}%` }}
+                        />
+                      </div>
+                    )}
                   </div>
                   <p className="mt-2 line-clamp-2 text-sm font-medium">
                     {b.title}
                   </p>
                   <p className="line-clamp-1 text-xs text-zinc-400">
                     {b.author}
+                  </p>
+                  <p className="mt-0.5 h-4 text-xs text-indigo-400">
+                    {progressLabel(b)}
                   </p>
                 </button>
                 <button

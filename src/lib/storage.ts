@@ -7,6 +7,8 @@ export interface BookMeta {
   cover: Blob | null;
   addedAt: number;
   location: string | null; // last reading position
+  progress?: number; // 0-100
+  lastReadAt?: number;
 }
 
 interface ReaderDB extends DBSchema {
@@ -30,7 +32,9 @@ const dbPromise = openDB<ReaderDB>("ebook-reader", 2, {
 export async function listBooks(): Promise<BookMeta[]> {
   const db = await dbPromise;
   const books = await db.getAll("books");
-  return books.sort((a, b) => b.addedAt - a.addedAt);
+  return books.sort(
+    (a, b) => (b.lastReadAt ?? b.addedAt) - (a.lastReadAt ?? a.addedAt),
+  );
 }
 
 export async function saveBook(meta: BookMeta, data: ArrayBuffer) {
@@ -64,11 +68,22 @@ export async function getBookMeta(id: string) {
   return db.get("books", id);
 }
 
-export async function saveLocation(id: string, location: string) {
+export async function saveLocation(
+  id: string,
+  location: string,
+  progress?: number,
+) {
   const db = await dbPromise;
-  const meta = await db.get("books", id);
+  const tx = db.transaction("books", "readwrite");
+  const meta = await tx.store.get(id);
   if (!meta) return;
-  await db.put("books", { ...meta, location });
+  await tx.store.put({
+    ...meta,
+    location,
+    lastReadAt: Date.now(),
+    ...(progress !== undefined ? { progress } : {}),
+  });
+  await tx.done;
 }
 
 export async function getLocations(id: string) {

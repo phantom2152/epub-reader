@@ -119,6 +119,11 @@ export default function Reader({
 
       let lastCfi = "";
 
+      const percentOf = (cfi: string) =>
+        b.locations.length()
+          ? Math.round((Number(b.locations.percentageFromCfi(cfi)) || 0) * 100)
+          : undefined;
+
       const updateProgress = () => {
         if (cancelled || !lastCfi || !b.locations.length()) return;
         const idx = Number(b.locations.locationFromCfi(lastCfi)) || 0;
@@ -134,7 +139,7 @@ export default function Reader({
         "relocated",
         (loc: { start: { cfi: string; href: string } }) => {
           lastCfi = loc.start.cfi;
-          saveLocation(bookId, loc.start.cfi);
+          saveLocation(bookId, loc.start.cfi, percentOf(loc.start.cfi));
           setActiveHref(loc.start.href);
           updateProgress();
         },
@@ -180,6 +185,7 @@ export default function Reader({
           await saveLocations(bookId, b.locations.save());
         }
         updateProgress();
+        if (lastCfi) saveLocation(bookId, lastCfi, percentOf(lastCfi));
       }
       buildLocations().catch((e) => console.error("locations failed", e));
     }
