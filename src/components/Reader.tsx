@@ -19,8 +19,10 @@ import {
   type Layout,
   type Settings,
 } from "../lib/settings";
+import { makeChapterLabeler, searchBook, type SearchHit } from "../lib/search";
 import Toc, { type TocItem } from "./Toc";
 import SettingsPanel from "./SettingsPanel";
+import SearchPanel from "./SearchPanel";
 
 interface Progress {
   page: number;
@@ -41,6 +43,8 @@ export default function Reader({
   const renditionRef = useRef<Rendition | null>(null);
   const bookRef = useRef<Book | null>(null);
   const settingsWrapRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const highlightRef = useRef<string | null>(null);
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
@@ -51,6 +55,7 @@ export default function Reader({
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.innerWidth >= 768,
   );
+  const [tab, setTab] = useState<"toc" | "search">("toc");
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(settings);
@@ -69,7 +74,6 @@ export default function Reader({
         getBookMeta(bookId),
       ]);
       if (cancelled) return;
-
       if (!data || !meta) {
         onMissing(); // book isn't in this browser's library, so send them home
         return;
@@ -164,8 +168,10 @@ export default function Reader({
       cancelled = true;
       renditionRef.current = null;
       bookRef.current = null;
+      highlightRef.current = null;
       book?.destroy();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookId]);
 
   // apply + persist settings whenever they change
@@ -184,29 +190,21 @@ export default function Reader({
   // keys pressed while focus is on the main page
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // don't turn pages while typing in the search box etc.
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
       if (e.key === "ArrowRight") renditionRef.current?.next();
       if (e.key === "ArrowLeft") renditionRef.current?.prev();
     }
     window.addEventListener("keyup", onKey);
     return () => window.removeEventListener("keyup", onKey);
-  }, []);
-
-  // re-layout the book whenever its container changes size (sidebar toggle, layout change, etc.)
-  useEffect(() => {
-    const el = viewerRef.current;
-    if (!el) return;
-    let frame = 0;
-    const ro = new ResizeObserver(() => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() =>
-        renditionRef.current?.resize(el.clientWidth, el.clientHeight),
-      );
-    });
-    ro.observe(el);
-    return () => {
-      cancelAnimationFrame(frame);
-      ro.disconnect();
-    };
   }, []);
 
   // close the settings panel on click-outside or Escape
@@ -229,6 +227,24 @@ export default function Reader({
       document.removeEventListener("keydown", onKey);
     };
   }, [settingsOpen]);
+
+  // re-layout the book whenever its container changes size (sidebar toggle, layout change, etc.)
+  useEffect(() => {
+    const el = viewerRef.current;
+    if (!el) return;
+    let frame = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() =>
+        renditionRef.current?.resize(el.clientWidth, el.clientHeight),
+      );
+    });
+    ro.observe(el);
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+    };
+  }, []);
 
   async function goTo(href: string) {
     const rendition = renditionRef.current;
@@ -275,12 +291,72 @@ export default function Reader({
     if (window.innerWidth < 768) setSidebarOpen(false);
   }
 
+  // ---- search ----
+
+  async function runSearch(
+    query: string,
+    signal: AbortSignal,
+    onProgress: (done: number, total: number, found: number) => void,
+  ) {
+    const book = bookRef.current;
+    if (!book) throw new Error("Book is not ready yet");
+    const { hits, truncated } = await searchBook(book, query, {
+      signal,
+      onProgress,
+    });
+    const labelFor = makeChapterLabeler(book, toc);
+    return {
+      hits: hits.map((h) => ({ ...h, chapter: labelFor(h.href) })),
+      truncated,
+    };
+  }
+
+  function clearHighlight() {
+    const r = renditionRef.current;
+    if (r && highlightRef.current) {
+      try {
+        r.annotations.remove(highlightRef.current, "highlight");
+      } catch {
+        // already gone, nothing to do
+      }
+    }
+    highlightRef.current = null;
+  }
+
+  async function goToHit(hit: SearchHit) {
+    const r = renditionRef.current;
+    if (!r) return;
+    clearHighlight();
+    try {
+      await r.display(hit.cfi);
+    } catch (e) {
+      console.warn("Could not jump to search result", e);
+      return;
+    }
+    try {
+      r.annotations.highlight(hit.cfi, {}, () => {}, "search-hit", {
+        fill: "#facc15",
+        "fill-opacity": "0.45",
+      });
+      highlightRef.current = hit.cfi;
+    } catch (e) {
+      console.warn("Could not highlight search result", e);
+    }
+    if (window.innerWidth < 768) setSidebarOpen(false);
+  }
+
+  function openSearch() {
+    setSidebarOpen(true);
+    setTab("search");
+    requestAnimationFrame(() => searchInputRef.current?.focus());
+  }
+
   return (
     <div className="flex h-screen flex-col">
       <header className="relative flex items-center gap-4 border-b border-zinc-800 px-4 py-2">
         <button
           onClick={() => setSidebarOpen((o) => !o)}
-          aria-label="Toggle chapters"
+          aria-label="Toggle sidebar"
           className="text-lg leading-none text-zinc-300 hover:text-white"
         >
           ☰
@@ -292,26 +368,66 @@ export default function Reader({
           ← Library
         </button>
         <h1 className="line-clamp-1 text-sm font-medium">{title}</h1>
-        <div ref={settingsWrapRef} className="ml-auto">
+
+        <div className="ml-auto flex items-center gap-4">
           <button
-            onClick={() => setSettingsOpen((o) => !o)}
-            aria-label="Settings"
+            onClick={openSearch}
+            aria-label="Search in book"
             className="text-lg leading-none text-zinc-300 hover:text-white"
           >
-            ⚙
+            🔍
           </button>
-          {settingsOpen && (
-            <SettingsPanel settings={settings} onChange={setSettings} />
-          )}
+          <div ref={settingsWrapRef}>
+            <button
+              onClick={() => setSettingsOpen((o) => !o)}
+              aria-label="Settings"
+              className="text-lg leading-none text-zinc-300 hover:text-white"
+            >
+              ⚙
+            </button>
+            {settingsOpen && (
+              <SettingsPanel settings={settings} onChange={setSettings} />
+            )}
+          </div>
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {sidebarOpen && (
-          <aside className="w-72 shrink-0 overflow-y-auto border-r border-zinc-800 p-2">
-            <Toc items={toc} active={activeHref} onSelect={goTo} />
-          </aside>
-        )}
+        {/* always mounted (just hidden), so search results and TOC state survive toggling */}
+        <aside
+          className={`w-72 shrink-0 flex-col border-r border-zinc-800 ${
+            sidebarOpen ? "flex" : "hidden"
+          }`}
+        >
+          <div className="flex border-b border-zinc-800 text-sm">
+            {(["toc", "search"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`flex-1 px-3 py-2 ${
+                  tab === t
+                    ? "border-b-2 border-indigo-500 text-white"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                {t === "toc" ? "Chapters" : "Search"}
+              </button>
+            ))}
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            <div className={tab === "toc" ? "" : "hidden"}>
+              <Toc items={toc} active={activeHref} onSelect={goTo} />
+            </div>
+            <div className={tab === "search" ? "" : "hidden"}>
+              <SearchPanel
+                search={runSearch}
+                onGo={goToHit}
+                onClear={clearHighlight}
+                inputRef={searchInputRef}
+              />
+            </div>
+          </div>
+        </aside>
 
         <div
           className="relative min-w-0 flex-1"
