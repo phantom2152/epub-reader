@@ -44,6 +44,7 @@ export default function Reader({
 }) {
   const viewerRef = useRef<HTMLDivElement>(null);
   const renditionRef = useRef<Rendition | null>(null);
+  const renditionReadyRef = useRef(false);
   const bookRef = useRef<Book | null>(null);
   const settingsWrapRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -108,6 +109,7 @@ export default function Reader({
         spread: lo.spread,
         minSpreadWidth: lo.minSpreadWidth,
       });
+      renditionReadyRef.current = false;
       renditionRef.current = rendition;
       registerTypography(rendition, () => settingsRef.current);
       applySettings(rendition, settingsRef.current);
@@ -169,8 +171,13 @@ export default function Reader({
           }));
       });
 
+      await rendition.started;
       await rendition.display(meta.location ?? undefined);
-      if (!cancelled) setStatus("ready");
+      if (cancelled || renditionRef.current !== rendition) return;
+      renditionReadyRef.current = true;
+      const viewer = viewerRef.current;
+      if (viewer) rendition.resize(viewer.clientWidth, viewer.clientHeight);
+      setStatus("ready");
 
       // Build (or load cached) page locations in the background
       async function buildLocations() {
@@ -196,6 +203,7 @@ export default function Reader({
 
     return () => {
       cancelled = true;
+      renditionReadyRef.current = false;
       renditionRef.current = null;
       bookRef.current = null;
       highlightRef.current = null;
@@ -267,14 +275,19 @@ export default function Reader({
     const el = viewerRef.current;
     if (!el) return;
     let frame = 0;
+    let disposed = false;
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() =>
-        renditionRef.current?.resize(el.clientWidth, el.clientHeight),
-      );
+      frame = requestAnimationFrame(() => {
+        const rendition = renditionRef.current;
+        if (!disposed && rendition && renditionReadyRef.current) {
+          rendition.resize(el.clientWidth, el.clientHeight);
+        }
+      });
     });
     ro.observe(el);
     return () => {
+      disposed = true;
       cancelAnimationFrame(frame);
       ro.disconnect();
     };
